@@ -70,6 +70,9 @@ external manager launches/rebinds do not share the lock, so detected binding
 changes abort rather than being overwritten. Resolved targets use stable tmux IDs.
 
 API calls inherit `@opencode_api_command`, or `@opencode_command` plus `api`.
+CLI stdout is captured in a private anonymous temporary file and then drained
+fully to Neovim. This avoids truncated JSON when OpenCode exits before large
+piped output is flushed, including a single message containing large tool output.
 An explicit `api.command = { 'opencode', 'api', ... }` overrides this for Opvi;
 keep its server context identical to the manager. The manager retains its own
 startup/request timeout settings. Opvi request timeouts are configured above.
@@ -86,6 +89,9 @@ back to that message and waits for its subsequent `idle` outcome; absence from
 the active map is never treated as completion. Failed/interrupted turns retain
 an error decoration. Tracking timeout reports unknown, not success, and does not
 stop server execution. `:OpviDisconnect` clears decorations and stops polling.
+History is fetched in small pages; malformed JSON retries the same read-only
+page at a smaller size. A read failure shows `status unavailable (retrying)`,
+not an agent failure. Its detail is available in the tracked entry's `last_error`.
 Responses, permissions, and questions remain in OpenCode's TUI. V1 TUI commands
 and agent mentions are not emulated.
 
