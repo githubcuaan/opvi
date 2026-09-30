@@ -66,12 +66,21 @@ function M.track(session, context, message_id, decorate)
     entry.inflight = true
     require('opvi.tmux').binding(session.target, function(id, binding_error)
       if not alive() then return end
-      if not id then entry.inflight = false; draw(entry, binding_error or 'status unknown', 'DiagnosticWarn'); return end
+      if not id then
+        entry.inflight, entry.last_error = false, binding_error
+        draw(entry, 'status unavailable (retrying)', 'DiagnosticWarn')
+        return
+      end
       if id ~= session.id then remove(entry); return end
       require('opvi.progress').read(session.id, message_id, function(result, err)
         entry.inflight = false
         if not alive() then return end
-        if not result then draw(entry, err or 'status unknown', 'DiagnosticWarn'); return end
+        if not result then
+          entry.last_error = err
+          draw(entry, 'status unavailable (retrying)', 'DiagnosticWarn')
+          return
+        end
+        entry.last_error = nil
         if result.finished then return finish(result) end
         draw(entry, result.tool and ('using ' .. result.tool) or result.state, 'Comment')
       end, alive)

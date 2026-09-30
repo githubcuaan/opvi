@@ -116,6 +116,29 @@ local function main()
     P.read('ses_test','msg_new',function(r) eq(r.state,'succeeded') end)
   end)
 
+  test('malformed history retries smaller pages without losing its cursor', function()
+    local P=require('opvi.progress')
+    local paths,done={},false
+    mock('opvi.transport',{request=function(method,path,_,cb)
+      eq(method,'get');table.insert(paths,path)
+      if #paths==1 then cb({data={{id='idle',type='idle',outcome='succeeded'}},cursor={next='page/2'}})
+      elseif #paths<4 then cb(nil,'incomplete response','invalid_json')
+      else cb({data={{id='msg_new',type='user'}},cursor={}}) end
+    end})
+    P.read('ses_test','msg_new',function(r) eq(r.state,'succeeded');done=true end)
+    assert(done);eq(#paths,4)
+    assert(paths[2]:find('limit=20&cursor=page%2F2',1,true))
+    assert(paths[3]:find('limit=10&cursor=page%2F2',1,true))
+    assert(paths[4]:find('limit=5&cursor=page%2F2',1,true))
+    local calls=0
+    mock('opvi.transport',{request=function(_,_,_,cb) calls=calls+1;cb(nil,'broken','invalid_json') end})
+    P.read('ses_test','msg_new',function(r,err) eq(r,nil);eq(err,'broken') end)
+    eq(calls,5) -- 20, 10, 5, 2, 1; bounded even if a single message is malformed.
+    calls=0
+    P.read('ses_test','msg_new',function() error('Canceled read called back') end,function() return false end)
+    eq(calls,0)
+  end)
+
   test('status tracks multiple messages, preserves extmark anchor, survives transient tmux error', function()
     local S = require('opvi.status')
     require('opvi.config').opts.status.interval=10
@@ -150,6 +173,18 @@ local function main()
     assert(errors[1][4].virt_lines[1][1][1]:find('Insufficient account funds',1,true))
     S.stop()
     eq(#vim.api.nvim_buf_get_extmarks(0,vim.api.nvim_create_namespace('OpviStatus'),0,-1,{}),0)
+    local unavailable=true
+    mock('opvi.progress',{read=function(_,_,cb)
+      if unavailable then cb(nil,'incomplete JSON') else cb({state='running'}) end
+    end})
+    S.track({id='ses_test',target='$1'},context,'msg_retry',true)
+    wait(function() return S.entries['ses_test:msg_retry'].last_error~=nil end)
+    local retry_marks=vim.api.nvim_buf_get_extmarks(0,vim.api.nvim_create_namespace('OpviStatus'),0,-1,{details=true})
+    eq(retry_marks[1][4].virt_lines[1][1][1],'opvi: status unavailable (retrying)')
+    eq(S.results['ses_test:msg_retry'],nil)
+    unavailable=false
+    wait(function() return S.entries['ses_test:msg_retry'].last_error==nil end)
+    S.stop()
   end)
 
   test('completion and subprocess response contracts', function()
@@ -173,6 +208,31 @@ local function main()
     T.request('get','/info',nil,function(body,err) eq(body,nil);assert(err);done=true end)
     wait(function() return done end)
     require('opvi.config').opts.api.command=nil
+  end)
+  test('large CLI output drains fully, including Unicode and final JSON fields', function()
+    local T=require('opvi.transport')
+    local done
+    require('opvi.config').opts.api.command={'python3',vim.fn.getcwd()..'/tests/large_response.py'}
+    T.request('get','/api/session/ses_test/message?limit=1',nil,function(body,err)
+      assert(body,err);eq(body.data.complete,true);eq(body.data.text,string.rep('á🙂',100000));done=true
+    end)
+    wait(function() return done end)
+    require('opvi.config').opts.api.command=nil
+  end)
+  test('buffered CLI timeout terminates the child command', function()
+    local path='/tmp/opencode/opvi-child-'..vim.fn.getpid()
+    local config=require('opvi.config').opts.api
+    local timeout=config.timeout
+    config.timeout=500
+    config.command={'python3','-c', 'import os,time;open('..string.format('%q',path)..',"w").write(str(os.getpid()));time.sleep(60)'}
+    local done
+    require('opvi.transport').request('get','/info',nil,function(body,err) eq(body,nil);assert(err);done=true end)
+    wait(function() return done end)
+    local pid=tonumber(vim.fn.readfile(path)[1])
+    local alive=vim.uv.kill(pid,0)
+    assert(not alive,'CLI child survived timeout')
+    vim.fn.delete(path)
+    config.command,config.timeout=nil,timeout
   end)
   test('lock helper releases on stdin close', function()
     local L=require('opvi.lock')

@@ -32,11 +32,18 @@ end
 
 function M.read(session_id, message_id, callback, alive)
   local messages, cursors = {}, {}
+  local limit = 20
   local function page(cursor)
     if alive and not alive() then return end
     local query = cursor and ('cursor=' .. cursor:gsub('[^%w%-._~]', function(c) return string.format('%%%02X', c:byte()) end)) or 'order=desc'
-    require('opvi.transport').request('get', '/api/session/' .. session_id .. '/message?limit=100&' .. query, nil, function(body, err)
+    require('opvi.transport').request('get', '/api/session/' .. session_id .. '/message?limit=' .. limit .. '&' .. query, nil, function(body, err, kind)
       if alive and not alive() then return end
+      -- Only this idempotent GET may retry. Do not advance its cursor or append
+      -- messages until a whole page has been decoded successfully.
+      if not body and kind == 'invalid_json' and limit > 1 then
+        limit = math.max(1, math.floor(limit / 2))
+        return page(cursor)
+      end
       if type(body) ~= 'table' or type(body.data) ~= 'table' then return callback(nil, err or 'Invalid message history') end
       local found = false
       for _, message in ipairs(body.data) do

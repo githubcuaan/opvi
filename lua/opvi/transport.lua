@@ -1,6 +1,6 @@
 local process = require('opvi.process')
 local M = { run = process.run, cancel = process.cancel }
-
+local root = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':h:h:h')
 
 function M.request(method, path, body, callback, startup)
   local config = require('opvi.config').opts
@@ -17,6 +17,10 @@ function M.request(method, path, body, callback, startup)
       argv = { 'sh', '-c', 'exec ' .. command .. ' "$@"', 'opvi' }
       vim.list_extend(argv, args)
     end
+    -- Some CLI versions exit before a large piped stdout is drained. Capture
+    -- to an anonymous regular file before relaying, including for a single
+    -- large message. Never replay a POST to recover from malformed output.
+    argv = vim.list_extend({ 'python3', root .. '/scripts/api.py' }, argv)
     M.run(argv, { timeout = startup and config.api.startup_timeout or config.api.timeout }, function(output, failure)
       if not output then return callback(nil, failure and (failure.message or tostring(failure)) or 'Request failed') end
       local body = vim.trim(output.stdout or '')
@@ -25,7 +29,7 @@ function M.request(method, path, body, callback, startup)
       if body == '' then return callback({}) end
       local ok, decoded = pcall(vim.json.decode, body)
       if not ok or type(decoded) ~= 'table' then
-        return callback(nil, 'Invalid OpenCode API response')
+        return callback(nil, 'Could not decode API response (malformed or incomplete JSON)', 'invalid_json')
       end
       if decoded.error ~= nil then
         local detail = type(decoded.error) == 'table' and (decoded.error.message or decoded.error.name) or
