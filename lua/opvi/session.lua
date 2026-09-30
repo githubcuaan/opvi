@@ -1,6 +1,7 @@
 local M = { pending = {}, generation = 0 }
 
 function M.connect(directory, callback)
+  require('opvi.state').set('connecting')
   local generation = M.generation
   local tmux, api = require('opvi.tmux'), require('opvi.transport')
   tmux.resolve(directory, function(target, err)
@@ -16,7 +17,12 @@ function M.connect(directory, callback)
         if generation ~= M.generation then return end
         local callbacks = M.pending[key] or {}
         M.pending[key] = nil
-        if value then M.connected = value end
+        if value then
+          M.connected = value
+          require('opvi.state').set('connected', value, value.title)
+        else
+          require('opvi.state').set('error', M.connected, nil, failure)
+        end
         for _, cb in ipairs(callbacks) do cb(value, failure) end
       end
       if not release then return finish(nil, lock_error) end
@@ -32,7 +38,12 @@ function M.connect(directory, callback)
                   or type(data.location.directory) ~= 'string' then
                 return finish(nil, api_error or 'Invalid or stale session binding')
               end
-              finish({ id = session_id, target = tmux_id, cwd = data.location.directory })
+              finish({
+                id = session_id,
+                target = tmux_id,
+                cwd = data.location.directory,
+                title = data.title,
+              })
             end)
           end
           if id ~= '' then return validate(id) end
@@ -68,6 +79,7 @@ function M.disconnect()
   M.generation = M.generation + 1
   M.pending = {}
   M.connected = nil
+  require('opvi.state').clear()
   require('opvi.lock').cancel()
 end
 

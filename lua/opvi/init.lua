@@ -8,6 +8,7 @@ local function notify(err) vim.notify('Opvi: ' .. tostring(err), vim.log.levels.
 function M.setup(opts)
   require('opvi.config').setup(opts)
   vim.api.nvim_set_hl(0, 'OpviContextPlaceholder', { link = 'Special', default = true })
+  require('opvi.lualine').setup(opts and opts.lualine)
 end
 
 function M.connect()
@@ -54,6 +55,7 @@ local function send(text, context, session, generation)
         end
         M.last_message_id = data.id
         request.state, request.message_id = 'accepted', data.id
+        require('opvi.state').refresh_title()
         require('opvi.status').track(session, context, data.id, text:match('@this%f[^%w_]') ~= nil)
         vim.api.nvim_exec_autocmds('User',
           { pattern = 'OpviPromptAccepted', data = { session_id = session.id, message_id = data.id } })
