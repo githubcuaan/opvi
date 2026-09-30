@@ -38,6 +38,55 @@ require('opvi').ask('@this: ') -- input, normal or visual mode
 require('opvi').prompt('Explain @buffer') -- send immediately
 ```
 
+## Statusline
+
+`require('opvi.lualine').component` shows whether this Neovim is bound to a
+conversation: `󰚩 <session title>` when connected, `󱚧` otherwise.
+
+A function component with options must be wrapped in its own table:
+
+```lua
+lualine_c = {
+  {
+    require('opvi.lualine').component,
+    color = function() return require('opvi.lualine').color() end,
+  },
+},
+```
+
+`require('opvi.lualine').spec()` returns that whole `{ component, color = ... }`
+pair, so `lualine_c = { require('opvi.lualine').spec() }` also works.
+
+Icons and color are overridable, all optional:
+
+```lua
+require('opvi').setup({
+  lualine = { fg = '#999999', connected = '', idle = '' },
+})
+```
+
+The color defaults to a muted gray `#585858`. Keep one color for every state:
+the glyph already carries the state, and a fixed color stays readable on any
+statusline background. A highlight group name does not work here, because
+lualine resolves component colors with `nvim_get_hl_by_name` and crashes when a
+runtime-created group cannot be resolved.
+
+State lives in `require('opvi.state')`: `phase` is `idle`, `connecting`,
+`connected`, or `error`, plus `session`, `title`, and `error`. Every change
+emits `User OpviStateChanged` with `phase`, `session_id`, and `title` in the
+event data, so other consumers only need a redraw:
+
+```lua
+vim.api.nvim_create_autocmd('User', {
+  pattern = 'OpviStateChanged',
+  callback = function() vim.lualine.redrawstatus({ refresh = { 'statusline' } }) end,
+})
+```
+
+The title refreshes on connect and after each accepted prompt, once OpenCode has
+generated it; before that the component shows the session ID. `:OpviDisconnect`
+returns it to `󱚧`.
+
 Context placeholders: `@this`, `@buffer`, `@buffers`, `@visible`,
 `@diagnostics`, `@quickfix`, `@marks`. Visual selections are captured inline before
 connecting, preserving UTF-8, tabs, block selections and exclusive selection.
