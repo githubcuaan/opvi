@@ -90,6 +90,11 @@ function M.ask(default) begin(default, true) end
 
 function M.prompt(text) begin(text, false) end
 
+function M.clear_status(buf)
+  if buf == nil then buf = vim.api.nvim_get_current_buf() end
+  require('opvi.status').clear(buf)
+end
+
 function M.disconnect()
   epoch = epoch + 1
   connection_epoch = connection_epoch + 1

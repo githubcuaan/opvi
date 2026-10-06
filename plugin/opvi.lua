@@ -4,6 +4,9 @@ vim.g.loaded_opvi = true
 vim.api.nvim_create_user_command('OpviConnect', function() require('opvi').connect() end, {})
 vim.api.nvim_create_user_command('OpviAsk', function(opts) require('opvi').ask(opts.args) end, { nargs = '*' })
 vim.api.nvim_create_user_command('OpviDisconnect', function() require('opvi').disconnect() end, {})
+vim.api.nvim_create_user_command('OpviClearStatus', function(opts)
+  if opts.bang then require('opvi').clear_status(false) else require('opvi').clear_status() end
+end, { bang = true })
 
 local group = vim.api.nvim_create_augroup('Opvi', { clear = true })
 

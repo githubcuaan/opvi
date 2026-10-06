@@ -1,9 +1,30 @@
 local M = { entries = {}, results = {} }
 local ns = vim.api.nvim_create_namespace('OpviStatus')
 
+function M.clear(buf)
+  local active = {}
+  for _, entry in pairs(M.entries) do
+    if entry.mark then
+      active[entry.buf] = active[entry.buf] or {}
+      active[entry.buf][entry.mark] = true
+    end
+  end
+  for _, buffer in ipairs(buf and { buf } or vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_valid(buffer) then
+      for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(buffer, ns, 0, -1, {})) do
+        if not (active[buffer] and active[buffer][mark[1]]) then
+          vim.api.nvim_buf_del_extmark(buffer, ns, mark[1])
+        end
+      end
+    end
+  end
+end
+
 local function remove(entry, keep_mark)
   M.entries[entry.key] = nil
-  if entry.timer then entry.timer:stop(); entry.timer:close(); entry.timer = nil end
+  if entry.timer then
+    entry.timer:stop(); entry.timer:close(); entry.timer = nil
+  end
   if not keep_mark and entry.mark and vim.api.nvim_buf_is_valid(entry.buf) then
     vim.api.nvim_buf_del_extmark(entry.buf, ns, entry.mark)
   end
@@ -38,8 +59,13 @@ end
 function M.track(session, context, message_id, decorate)
   if not require('opvi.config').opts.status.enabled then return end
   local key = session.id .. ':' .. message_id
-  local entry = { key = key, buf = context.buf, decorate = decorate,
-    row = (context.range and context.range.from[1] or context.cursor[1]) - 1, started = vim.uv.now() }
+  local entry = {
+    key = key,
+    buf = context.buf,
+    decorate = decorate,
+    row = (context.range and context.range.from[1] or context.cursor[1]) - 1,
+    started = vim.uv.now()
+  }
   if M.entries[key] then remove(M.entries[key]) end
   M.entries[key] = entry
   draw(entry, 'submitted', 'Comment')
@@ -52,14 +78,19 @@ function M.track(session, context, message_id, decorate)
     end
     remove(entry, result.state ~= 'succeeded')
     M.results[key] = result
-    vim.api.nvim_exec_autocmds('User', { pattern = 'OpviPromptFinished', data = {
-      session_id = session.id, message_id = message_id, state = result.state, error = result.error,
-    } })
+    vim.api.nvim_exec_autocmds('User', {
+      pattern = 'OpviPromptFinished',
+      data = {
+        session_id = session.id, message_id = message_id, state = result.state, error = result.error,
+      }
+    })
   end
   entry.timer = vim.uv.new_timer()
   entry.timer:start(0, config.interval, vim.schedule_wrap(function()
     if not alive() or entry.inflight then return end
-    if not vim.api.nvim_buf_is_valid(entry.buf) then remove(entry); return end
+    if not vim.api.nvim_buf_is_valid(entry.buf) then
+      remove(entry); return
+    end
     if vim.uv.now() - entry.started > config.timeout then
       return finish({ state = 'unknown', error = 'Status tracking timed out; execution may still be running' })
     end
@@ -71,7 +102,9 @@ function M.track(session, context, message_id, decorate)
         draw(entry, 'status unavailable (retrying)', 'DiagnosticWarn')
         return
       end
-      if id ~= session.id then remove(entry); return end
+      if id ~= session.id then
+        remove(entry); return
+      end
       require('opvi.progress').read(session.id, message_id, function(result, err)
         entry.inflight = false
         if not alive() then return end
