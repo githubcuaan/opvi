@@ -138,6 +138,10 @@ back to that message and waits for its subsequent `idle` outcome; absence from
 the active map is never treated as completion. Failed/interrupted turns retain
 an error decoration. Tracking timeout reports unknown, not success, and does not
 stop server execution. `:OpviDisconnect` clears decorations and stops polling.
+Use `:OpviClearStatus` to dismiss finished/error decorations in the current buffer,
+or `:OpviClearStatus!` for all buffers, without disconnecting or stopping active
+tracking. Lua: `require('opvi').clear_status()` (current buffer), or
+`require('opvi').clear_status(false)` (all buffers). Stored results remain available.
 History is fetched in small pages; malformed JSON retries the same read-only
 page at a smaller size. A read failure shows `status unavailable (retrying)`,
 not an agent failure. Its detail is available in the tracked entry's `last_error`.
