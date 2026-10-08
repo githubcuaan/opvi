@@ -3,6 +3,8 @@
 Neovim Ask UI for OpenCode V2, bound to conversations managed by
 [tmux-opencode-session-manager](https://github.com/githubcuaan/tmux-opencode-session-manager).
 
+https://github.com/user-attachments/assets/c5dce014-e445-4495-abe1-15d3ed1b5850
+
 ## Install
 
 Requires Neovim 0.11+ (`getregionpos` for accurate selections), OpenCode V2, tmux, and the manager's dependencies
