@@ -46,6 +46,35 @@ local function main()
     vim.o.selection = 'inclusive'
   end)
 
+  test('saved selections use references; unsaved and block selections stay inline', function()
+    local C = require('opvi.context')
+    local path = vim.fn.tempname()
+    vim.fn.writefile({ 'abcdef', 'ghijkl' }, path)
+    vim.cmd('edit! ' .. vim.fn.fnameescape(path))
+    local function capture(mode, exclusive)
+      vim.o.selection = exclusive and 'exclusive' or 'inclusive'
+      vim.api.nvim_win_set_cursor(0, { 1, 1 })
+      vim.cmd('normal! ' .. mode)
+      vim.api.nvim_win_set_cursor(0, { 1, 3 })
+      return C.capture()
+    end
+    local c = capture('v')
+    eq(c:render('@this'), path .. ':L1:C2-L1:C4'); c:clear()
+    c = capture('v', true)
+    eq(c.selection_text, 'bc')
+    eq(c:render('@this'), path .. ':L1:C2-L1:C3'); c:clear()
+    c = capture('V')
+    eq(c:render('@this'), path .. ':L1-L1'); c:clear()
+    c = capture('\22')
+    assert(c:render('@this'):find('\n```', 1, true)); c:clear()
+    vim.api.nvim_buf_set_lines(0, 0, 1, false, { 'ABCDEF' })
+    c = capture('v')
+    assert(c:render('@this'):find('BCD', 1, true)); c:clear()
+    vim.cmd('enew!')
+    vim.fn.delete(path)
+    vim.o.selection = 'inclusive'
+  end)
+
   test('same target deduplicates different cwd and re-reads binding inside lock', function()
     local S = require('opvi.session')
     local release_count, creates, acquire, binding, result = 0, 0, nil, '', {}
