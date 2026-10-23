@@ -90,9 +90,10 @@ generated it; before that the component shows the session ID. `:OpviDisconnect`
 returns it to `󱚧`.
 
 Context placeholders: `@this`, `@buffer`, `@buffers`, `@visible`,
-`@diagnostics`, `@quickfix`, `@marks`. Visual selections are captured inline before
+`@diagnostics`, `@quickfix`, `@marks`. Visual selections are captured before
 connecting, preserving UTF-8, tabs, block selections and exclusive selection.
-Unsaved/unnamed buffers are also inline. Saved buffers use file/line/column references.
+Saved buffers use file/line/column references, including character and line selections.
+Unsaved/unnamed buffers and block selections include the exact selected content inline.
 Native input supports completion; Snacks input starts an in-process LSP completion
 provider (enable your completion plugin's LSP source) and supports omnifunc (`<C-x><C-o>`).
 Custom contexts are callbacks receiving the captured context:

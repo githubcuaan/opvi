@@ -35,6 +35,11 @@ function M.capture()
     if a[1] > b[1] or (a[1] == b[1] and a[2] > b[2]) then a, b = b, a end
     self.range = { from = a, to = b, kind = mode == 'V' and 'line' or mode == '\22' and 'block' or 'char' }
     if mode == '\22' and a[2] > b[2] then a[2], b[2] = b[2], a[2] end
+    if mode == 'v' and #positions > 0 then
+      local first, last = positions[1], positions[#positions]
+      self.range.from = { first[1][2], first[1][3] - 1 }
+      self.range.to = { last[2][2], last[2][3] - 1 }
+    end
     vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<Esc>', true, false, true), 'nx', false)
     for _, position in ipairs(positions) do
       local row = position[1][2] - 1
@@ -87,8 +92,8 @@ end
 M.builtins = {
   ['@this'] = function(c)
     local r = c.range
-    if c.selection_text then
-      local path = vim.api.nvim_buf_get_name(c.buf)
+    local path = vim.api.nvim_buf_get_name(c.buf)
+    if c.selection_text and (path == '' or not vim.uv.fs_stat(path) or vim.bo[c.buf].modified or r.kind == 'block') then
       return (path ~= '' and path or '[unnamed]') .. ':L' .. r.from[1] .. '-L' .. r.to[1]
           .. '\n```' .. vim.bo[c.buf].filetype .. '\n' .. c.selection_text .. '\n```'
     end
